@@ -12,11 +12,14 @@ import (
 // @Host 						localhost:8080
 // @BasePath  					/
 // @Schemes 					https
-func (s *Server) SetupAPIRoutes(smsHandler *sms.SmsHandler) {
+func (s *Server) SetupAPIRoutes(
+	smsHandler *sms.SmsHandler,
+	priorityMiddleware *middleware.PriorityMiddleware,
+) {
 	r := s.engine
 
 	v1 := r.Group("v1")
-	v1.Use(middleware.HandleAuth())
+	v1.Use(middleware.HandleAuth(), priorityMiddleware.Handle)
 	{
 		v1.GET("/sms/send", smsHandler.Send)
 	}

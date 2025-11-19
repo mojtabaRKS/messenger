@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type ThrottleMiddleware struct {
+type PriorityMiddleware struct {
 	redisClient  *redis.Client
 	data         map[string]int
 	dataChecksum string
@@ -24,13 +24,13 @@ type planService interface {
 	GetAllPlansAndSetInRedis(ctx context.Context) (map[string]int, error)
 }
 
-func NewThrottleMiddleware(
+func NewPriorityMiddleware(
 	redisClient *redis.Client,
+	planService planService,
 	data map[string]int,
 	dataChecksum string,
-	planService planService,
-) *ThrottleMiddleware {
-	return &ThrottleMiddleware{
+) *PriorityMiddleware {
+	return &PriorityMiddleware{
 		redisClient:  redisClient,
 		data:         data,
 		dataChecksum: dataChecksum,
@@ -38,30 +38,28 @@ func NewThrottleMiddleware(
 	}
 }
 
-func (m *ThrottleMiddleware) Handle(next http.Handler) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		err := m.CompareChecksum(c)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		apiKey := c.GetHeader("X-Api-Key")
-		if apiKey == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key is empty"})
-		}
-
-		priority, exists := m.data[apiKey]
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key is empty"})
-		}
-
-		c.Set("priority", priority)
-		c.Next()
+func (m *PriorityMiddleware) Handle(c *gin.Context) {
+	err := m.CompareChecksum(c)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+
+	apiKey := c.GetHeader("X-Api-Key")
+	if apiKey == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key is empty"})
+	}
+
+	priority, exists := m.data[apiKey]
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key is empty"})
+	}
+
+	c.Set("priority", priority)
+	c.Next()
 }
 
-func (m *ThrottleMiddleware) CompareChecksum(ctx context.Context) error {
+func (m *PriorityMiddleware) CompareChecksum(ctx context.Context) error {
 	now := time.Now().UnixMilli()
 	shouldCompare := false
 
