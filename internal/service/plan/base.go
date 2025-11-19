@@ -19,5 +19,6 @@ type planRepository interface {
 func NewPlanService(planRepository planRepository, redisClient *redis.Client) *planService {
 	return &planService{
 		planRepository: planRepository,
+		redisClient:    redisClient,
 	}
 }
