@@ -1,6 +1,8 @@
 package command
 
 import (
+	"arvan/message-gateway/intrernal/repository"
+	"arvan/message-gateway/intrernal/service/plan"
 	"context"
 	"fmt"
 
@@ -29,7 +31,7 @@ func (cmd Server) Command(ctx context.Context, cfg *config.Config) *cobra.Comman
 }
 
 func (cmd Server) main(cfg *config.Config, ctx context.Context) {
-	_, err := infra.NewPostgresClient(ctx, cfg.Database.Postgres)
+	db, err := infra.NewPostgresClient(ctx, cfg.Database.Postgres)
 	if err != nil {
 		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to postgresql"))
 		return
@@ -47,7 +49,23 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		}
 	}()
 
+	// create repositories
+	planRepository := repository.NewPlanRepository(db)
+
+	// create services
+	planService := plan.NewPlanService(planRepository, redisClient)
+
+	// set plans in redis for get on demand
+	plansPriorities, err := planService.GetAllPlansAndSetInRedis(ctx)
+	if err != nil {
+		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to get all plans and set in redis"))
+		return
+	}
+
+	// create handlers
 	smsHandler := sms.New()
+
+	// create middlewares
 
 	server := api.New(cfg.AppEnv)
 	server.SetupAPIRoutes(
