@@ -1,9 +1,10 @@
 package infra
 
 import (
-	"arvan/message-gateway/intrernal/config"
+	"arvan/message-gateway/internal/config"
 	"context"
 	"fmt"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/redis/go-redis/v9"

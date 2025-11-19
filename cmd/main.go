@@ -2,7 +2,7 @@ package main
 
 import (
 	"arvan/message-gateway/cmd/command"
-	"arvan/message-gateway/intrernal/config"
+	"arvan/message-gateway/internal/config"
 	"context"
 	"os/signal"
 	"syscall"

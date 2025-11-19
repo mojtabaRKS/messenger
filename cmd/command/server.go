@@ -1,9 +1,9 @@
 package command
 
 import (
-	"arvan/message-gateway/intrernal/api/middleware"
-	"arvan/message-gateway/intrernal/repository"
-	"arvan/message-gateway/intrernal/service/plan"
+	"arvan/message-gateway/internal/api/middleware"
+	"arvan/message-gateway/internal/repository"
+	"arvan/message-gateway/internal/service/plan"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -13,10 +13,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"arvan/message-gateway/intrernal/api"
-	"arvan/message-gateway/intrernal/api/handler/sms"
-	"arvan/message-gateway/intrernal/config"
-	"arvan/message-gateway/intrernal/infra"
+	"arvan/message-gateway/internal/api"
+	"arvan/message-gateway/internal/api/handler/sms"
+	"arvan/message-gateway/internal/config"
+	"arvan/message-gateway/internal/infra"
 )
 
 type Server struct {

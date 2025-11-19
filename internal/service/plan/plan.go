@@ -1,7 +1,7 @@
 package plan
 
 import (
-	"arvan/message-gateway/intrernal/constant"
+	"arvan/message-gateway/internal/constant"
 	"context"
 )
 

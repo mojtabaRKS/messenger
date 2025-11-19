@@ -1,8 +1,9 @@
 package plan
 
 import (
-	"arvan/message-gateway/intrernal/domain"
+	"arvan/message-gateway/internal/domain"
 	"context"
+
 	"github.com/redis/go-redis/v9"
 )
 

@@ -1,8 +1,8 @@
 package api
 
 import (
-	"arvan/message-gateway/intrernal/api/handler/sms"
-	"arvan/message-gateway/intrernal/api/middleware"
+	"arvan/message-gateway/internal/api/handler/sms"
+	"arvan/message-gateway/internal/api/middleware"
 )
 
 // SetupAPIRoutes

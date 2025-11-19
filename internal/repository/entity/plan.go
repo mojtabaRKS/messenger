@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"arvan/message-gateway/intrernal/domain"
+	"arvan/message-gateway/internal/domain"
 	"time"
 )
 

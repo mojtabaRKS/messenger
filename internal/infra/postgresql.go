@@ -1,9 +1,10 @@
 package infra
 
 import (
-	"arvan/message-gateway/intrernal/config"
+	"arvan/message-gateway/internal/config"
 	"context"
 	"fmt"
+
 	"github.com/pkg/errors"
 
 	"github.com/golang-migrate/migrate/v4"

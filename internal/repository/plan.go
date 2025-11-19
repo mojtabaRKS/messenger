@@ -1,9 +1,10 @@
 package repository
 
 import (
-	"arvan/message-gateway/intrernal/domain"
-	"arvan/message-gateway/intrernal/repository/entity"
+	"arvan/message-gateway/internal/domain"
+	"arvan/message-gateway/internal/repository/entity"
 	"context"
+
 	"gorm.io/gorm"
 )
 

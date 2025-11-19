@@ -1,12 +1,13 @@
 package api
 
 import (
-	"arvan/message-gateway/intrernal/config"
+	"arvan/message-gateway/internal/config"
 	"context"
 	"fmt"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 type Server struct {

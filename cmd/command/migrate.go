@@ -1,8 +1,8 @@
 package command
 
 import (
-	"arvan/message-gateway/intrernal/config"
-	"arvan/message-gateway/intrernal/infra"
+	"arvan/message-gateway/internal/config"
+	"arvan/message-gateway/internal/infra"
 	"context"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"

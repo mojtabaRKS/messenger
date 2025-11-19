@@ -1,14 +1,15 @@
 package middleware
 
 import (
-	"arvan/message-gateway/intrernal/constant"
+	"arvan/message-gateway/internal/constant"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type PriorityMiddleware struct {
