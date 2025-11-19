@@ -1,3 +1,0 @@
-CREATE TABLE jobs (
-    id        BIGSERIAL PRIMARY KEY,
-)
