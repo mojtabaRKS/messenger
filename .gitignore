@@ -8,7 +8,7 @@
 coverage.*
 *.coverprofile
 profile.cov
- vendor/
+vendor/
 go.work
 go.work.sum
 .env
