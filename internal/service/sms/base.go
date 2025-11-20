@@ -15,7 +15,6 @@ type smsService struct {
 	dlqRepository dlqRepository
 	redisClient   *redis.Client
 	logger        *logrus.Logger
-	kafkaClient   *kafka.Conn
 	kafkaWriter   *kafka.Writer
 	data          map[string]int
 	kafkaWorkChan chan domain.KafkaMessage
@@ -35,7 +34,6 @@ func NewSmsService(
 	dlqRepo dlqRepository,
 	redisClient *redis.Client,
 	logger *logrus.Logger,
-	kafkaClient *kafka.Conn,
 	kafkaWriter *kafka.Writer,
 ) *smsService {
 	return &smsService{
@@ -43,7 +41,6 @@ func NewSmsService(
 		dlqRepository: dlqRepo,
 		redisClient:   redisClient,
 		logger:        logger,
-		kafkaClient:   kafkaClient,
 		kafkaWriter:   kafkaWriter,
 		kafkaWorkChan: make(chan domain.KafkaMessage, constant.KafkaWorkerBufSize),
 	}

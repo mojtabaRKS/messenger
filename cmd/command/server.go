@@ -54,19 +54,7 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		}
 	}()
 
-	kafkaClient, err := infra.NewKafkaClient(ctx, cfg.Kafka)
-	if err != nil {
-		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to kafka"))
-		return
-	}
-
-	defer func() {
-		if err = kafkaClient.Close(); err != nil {
-			cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to close kefka"))
-		}
-	}()
-
-	kfkaWriter := infra.NewKafkaWriter(cfg.Kafka)
+	kafkaWriter := infra.NewKafkaWriter(cfg.Kafka)
 
 	// create repositories
 	planRepository := repository.NewPlanRepository(db)
@@ -75,7 +63,7 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 
 	// create services
 	planServiceInstance := plan.NewPlanService(planRepository, redisClient)
-	smsServiceInstance := smsService.NewSmsService(smsRepository, dlqRepository, redisClient, cmd.Logger, kafkaClient, kfkaWriter)
+	smsServiceInstance := smsService.NewSmsService(smsRepository, dlqRepository, redisClient, cmd.Logger, kafkaWriter)
 
 	// set plans in redis for get on demand
 	plans, err := planServiceInstance.GetAllPlansAndSetInRedis(ctx)
