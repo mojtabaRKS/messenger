@@ -2,8 +2,10 @@ package command
 
 import (
 	"arvan/message-gateway/internal/api/middleware"
+	"arvan/message-gateway/internal/constant"
 	"arvan/message-gateway/internal/repository"
 	"arvan/message-gateway/internal/service/plan"
+	smsService "arvan/message-gateway/internal/service/sms"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -52,14 +54,31 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		}
 	}()
 
+	kafkaClient, err := infra.NewKafkaClient(ctx, cfg.Kafka)
+	if err != nil {
+		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to kafka"))
+		return
+	}
+
+	defer func() {
+		if err = kafkaClient.Close(); err != nil {
+			cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to close kefka"))
+		}
+	}()
+
+	kfkaWriter := infra.NewKafkaWriter(cfg.Kafka)
+
 	// create repositories
 	planRepository := repository.NewPlanRepository(db)
+	dlqRepository := repository.NewDlqRepository(db)
+	smsRepository := repository.NewSmsRepository(db)
 
 	// create services
-	planService := plan.NewPlanService(planRepository, redisClient)
+	planServiceInstance := plan.NewPlanService(planRepository, redisClient)
+	smsServiceInstance := smsService.NewSmsService(smsRepository, dlqRepository, redisClient, cmd.Logger, kafkaClient, kfkaWriter)
 
 	// set plans in redis for get on demand
-	plans, err := planService.GetAllPlansAndSetInRedis(ctx)
+	plans, err := planServiceInstance.GetAllPlansAndSetInRedis(ctx)
 	if err != nil {
 		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to get all plans and set in redis"))
 		return
@@ -76,12 +95,12 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	hash := h.Sum(nil)
 
 	// create handlers
-	smsHandler := sms.New()
+	smsHandler := sms.New(smsServiceInstance)
 
 	// create middlewares
 	priorityMiddleware := middleware.NewPriorityMiddleware(
 		redisClient,
-		planService,
+		planServiceInstance,
 		plans,
 		string(hash),
 	)
@@ -91,6 +110,11 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		smsHandler,
 		priorityMiddleware,
 	)
+
+	// start background kafka workers
+	for i := 0; i < constant.KafkaWorkerCount; i++ {
+		go smsServiceInstance.ProduceMessages(i)
+	}
 
 	// run the server
 	if err := server.Serve(ctx, fmt.Sprintf(":%d", cfg.HTTP.Port)); err != nil {
