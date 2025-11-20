@@ -18,6 +18,7 @@ type (
 		LogLevel logrus.Level
 		HTTP     HTTP
 		Database Database
+		Kafka    Kafka
 	}
 
 	HTTP struct {
@@ -42,5 +43,10 @@ type (
 		Port     int
 		Password string
 		Database int
+	}
+
+	Kafka struct {
+		Host string
+		Port int
 	}
 )
