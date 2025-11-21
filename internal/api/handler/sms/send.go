@@ -2,8 +2,11 @@ package sms
 
 import (
 	"arvan/message-gateway/internal/api/request"
-	"github.com/gin-gonic/gin"
+	"arvan/message-gateway/internal/constant"
+	"github.com/pkg/errors"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 func (h *SmsHandler) Send(c *gin.Context) {
@@ -13,10 +16,14 @@ func (h *SmsHandler) Send(c *gin.Context) {
 		return
 	}
 
-	userId := c.MustGet("userId").(int)
-	priority := c.MustGet("priority").(int)
-	err := h.smsService.Send(c, userId, priority, req)
+	userId := c.MustGet(constant.UserIdKey).(int)
+	priority := c.MustGet(constant.PriorityKey).(int)
+	err := h.smsService.Send(c, priority, userId, req)
 	if err != nil {
+		if errors.Is(err, constant.InsufficientBalanceErr) {
+			c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
