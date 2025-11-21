@@ -1,8 +1,10 @@
 package middleware
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 func HandleAuth() gin.HandlerFunc {
@@ -19,7 +21,16 @@ func HandleAuth() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user_id", userId)
+		iUserId, err := strconv.Atoi(userId)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"code": http.StatusUnauthorized,
+				"msg":  "user is not authorized",
+			})
+			return
+		}
+
+		c.Set("user_id", iUserId)
 		c.Next()
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,9 +18,10 @@ type PriorityMiddleware struct {
 	data         map[string]int
 	dataChecksum string
 	planService  planService
+	lastBucket   int64
+	mu           sync.RWMutex
+	stopCh       chan struct{}
 }
-
-var lastBucket int64
 
 type planService interface {
 	GetAllPlansAndSetInRedis(ctx context.Context) (map[string]int, error)
@@ -31,50 +33,67 @@ func NewPriorityMiddleware(
 	data map[string]int,
 	dataChecksum string,
 ) *PriorityMiddleware {
-	return &PriorityMiddleware{
+	pm := &PriorityMiddleware{
 		redisClient:  redisClient,
 		data:         data,
 		dataChecksum: dataChecksum,
 		planService:  planService,
+		stopCh:       make(chan struct{}),
 	}
+
+	// Start background refresh goroutine
+	go pm.backgroundRefresh()
+
+	return pm
+}
+
+// Stop gracefully stops the background refresh
+func (m *PriorityMiddleware) Stop() {
+	close(m.stopCh)
 }
 
 func (m *PriorityMiddleware) Handle(c *gin.Context) {
-	err := m.CompareChecksum(c)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	apiKey := c.GetHeader("X-Api-Key")
 	if apiKey == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key is empty"})
+		return
 	}
 
+	// Fast read-only access to cached data (no blocking operations)
+	m.mu.RLock()
 	priority, exists := m.data[apiKey]
+	m.mu.RUnlock()
+
 	if !exists {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key is empty"})
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "api key not found"})
+		return
 	}
 
-	c.Set("priority", priority)
+	c.Set(constant.PriorityKey, priority)
 	c.Next()
 }
 
-func (m *PriorityMiddleware) CompareChecksum(ctx context.Context) error {
-	now := time.Now().UnixMilli()
-	shouldCompare := false
+// backgroundRefresh runs in background and refreshes plan data every 5 minutes
+func (m *PriorityMiddleware) backgroundRefresh() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 
-	// compare our plans every 5 minutes.
-	// this leads to eventual consistency
-	bucket := now / 300000
-	if bucket != lastBucket {
-		lastBucket = bucket
-		shouldCompare = true
+	for {
+		select {
+		case <-m.stopCh:
+			return
+		case <-ticker.C:
+			if err := m.refreshPlans(); err != nil {
+				// Log but don't crash - continue with cached data
+				// Logger would need to be added to struct, for now just continue
+			}
+		}
 	}
+}
 
-	if !shouldCompare {
-		return nil
-	}
+func (m *PriorityMiddleware) refreshPlans() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	redisData, err := m.redisClient.Get(ctx, constant.RedisPlanKey).Result()
 	if err != nil {
@@ -84,12 +103,17 @@ func (m *PriorityMiddleware) CompareChecksum(ctx context.Context) error {
 	h := sha256.New()
 	h.Write([]byte(redisData))
 	hashed := h.Sum(nil)
-	// our checksum and plans are not changed! so ignore it!
-	if m.dataChecksum == string(hashed) {
-		return nil
+
+	// Check if data changed
+	m.mu.RLock()
+	currentChecksum := m.dataChecksum
+	m.mu.RUnlock()
+
+	if currentChecksum == string(hashed) {
+		return nil // No changes
 	}
 
-	// reset data in redis
+	// Fetch fresh data
 	plans, err := m.planService.GetAllPlansAndSetInRedis(ctx)
 	if err != nil {
 		return err
@@ -103,7 +127,12 @@ func (m *PriorityMiddleware) CompareChecksum(ctx context.Context) error {
 	h.Reset()
 	h.Write(marshalled)
 	newHash := h.Sum(nil)
+
+	// Update with write lock
+	m.mu.Lock()
+	m.data = plans
 	m.dataChecksum = string(newHash)
+	m.mu.Unlock()
 
 	return nil
 }
