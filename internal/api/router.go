@@ -21,6 +21,6 @@ func (s *Server) SetupAPIRoutes(
 	v1 := r.Group("v1")
 	v1.Use(middleware.HandleAuth(), priorityMiddleware.Handle)
 	{
-		v1.GET("/sms/send", smsHandler.Send)
+		v1.POST("/sms/send", smsHandler.Send)
 	}
 }

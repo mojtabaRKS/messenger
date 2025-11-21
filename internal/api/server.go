@@ -17,6 +17,8 @@ type Server struct {
 func New(appEnv config.AppEnv) *Server {
 	if appEnv == config.ProductionEnv {
 		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
 	}
 
 	r := gin.New()
