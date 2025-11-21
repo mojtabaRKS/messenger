@@ -28,10 +28,6 @@ const (
 	CustomerPendingLimit = 1000            // per-customer pending cap before we start dropping (or take action)
 	CustomerStateTTL     = 5 * time.Minute // when no activity, remove the customer state to free memory
 
-	// Token bucket defaults (per-customer default; can be customized per customer)
-	DefaultRefillRate = 10.0  // tokens per second
-	DefaultCapacity   = 100.0 // maximum tokens
-
 	// Timeouts and retries
 	KafkaWriteTimeout   = 5 * time.Second
 	KafkaWriteRetries   = 3
@@ -41,10 +37,12 @@ const (
 	UserIdKey   = "user_id"
 	PriorityKey = "priority"
 
-	// Redis balance cache settings
+	// Redis balance cache settings (optimized for 2000-3000+ req/sec)
 	BalanceKeyPrefix     = "balance:"
-	BalanceSyncBatchSize = 500             // batch size for DB sync
-	BalanceSyncInterval  = 5 * time.Second // sync interval for balance updates
+	BalanceSyncBatchSize = 500                    // batch size for DB sync
+	BalanceSyncInterval  = 800 * time.Millisecond // sync interval (faster flushing for high throughput)
+	BalanceQueueSize     = 100000                 // buffer size for pending writes (burst capacity)
+	BalanceWriterWorkers = 6                      // parallel batch writers (3000+ req/sec capacity)
 
 	// Kafka producer worker pool
 	KafkaWriteWorkerPool = 50 // fixed worker pool size for Kafka writes

@@ -20,6 +20,7 @@ type BalanceService struct {
 	pendingWrites chan *BalanceUpdate
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
+	numWorkers    int // number of parallel batch writer workers
 
 	// Pre-compiled Lua script for atomic balance deduction
 	deductScript *redis.Script
@@ -52,19 +53,24 @@ func NewBalanceService(
 	redisClient *redis.Client,
 	db *gorm.DB,
 	logger *logrus.Logger,
+	queueSize int,
+	numWorkers int,
 ) *BalanceService {
 	bs := &BalanceService{
 		redisClient:   redisClient,
 		db:            db,
 		logger:        logger,
-		pendingWrites: make(chan *BalanceUpdate, 10000),
+		pendingWrites: make(chan *BalanceUpdate, queueSize),
 		stopCh:        make(chan struct{}),
 		deductScript:  deductBalanceLua,
+		numWorkers:    numWorkers,
 	}
 
-	// Start batch writer goroutine
-	bs.wg.Add(1)
-	go bs.batchWriter()
+	// Start multiple batch writer goroutines for higher throughput
+	for i := 0; i < numWorkers; i++ {
+		bs.wg.Add(1)
+		go bs.batchWriter(i)
+	}
 
 	return bs
 }
