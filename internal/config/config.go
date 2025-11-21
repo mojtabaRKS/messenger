@@ -14,11 +14,12 @@ const (
 
 type (
 	Config struct {
-		AppEnv   AppEnv
-		LogLevel logrus.Level
-		HTTP     HTTP
-		Database Database
-		Kafka    Kafka
+		AppEnv      AppEnv
+		LogLevel    logrus.Level
+		HTTP        HTTP
+		Database    Database
+		Kafka       Kafka
+		WorkerCount int
 	}
 
 	HTTP struct {

@@ -28,8 +28,9 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		AppEnv:   AppEnv(viper.GetString("APP_ENV")),
-		LogLevel: logLvl,
+		AppEnv:      AppEnv(viper.GetString("APP_ENV")),
+		LogLevel:    logLvl,
+		WorkerCount: viper.GetInt("WORKER_COUNT"),
 		HTTP: HTTP{
 			Port: viper.GetInt("HTTP_PORT"),
 		},
@@ -47,6 +48,10 @@ func Load() (*Config, error) {
 				Password: viper.GetString("REDIS_PASSWORD"),
 				Database: viper.GetInt("REDIS_DB"),
 			},
+		},
+		Kafka: Kafka{
+			Host: viper.GetString("KAFKA_HOST"),
+			Port: viper.GetInt("KAFKA_PORT"),
 		},
 	}, nil
 }
