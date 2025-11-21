@@ -94,7 +94,7 @@ func (bs *BalanceService) InitializeBalanceCache(ctx context.Context) error {
 }
 
 // batchWriter runs in background and periodically flushes pending writes to database
-func (bs *BalanceService) batchWriter() {
+func (bs *BalanceService) batchWriter(workerID int) {
 	defer bs.wg.Done()
 
 	ticker := time.NewTicker(constant.BalanceSyncInterval)
@@ -102,23 +102,25 @@ func (bs *BalanceService) batchWriter() {
 
 	batch := make([]*BalanceUpdate, 0, constant.BalanceSyncBatchSize)
 
+	bs.logger.Infof("balance batch writer %d started", workerID)
+
 	for {
 		select {
 		case <-bs.stopCh:
 			// Flush remaining on shutdown
-			bs.logger.Info("balance service: flushing remaining writes on shutdown...")
-			bs.flushBatch(batch)
+			bs.logger.Infof("balance batch writer %d: flushing remaining writes on shutdown...", workerID)
+			bs.flushBatch(batch, workerID)
 			// Drain channel
 			for len(bs.pendingWrites) > 0 {
 				update := <-bs.pendingWrites
 				batch = append(batch, update)
 				if len(batch) >= constant.BalanceSyncBatchSize {
-					bs.flushBatch(batch)
+					bs.flushBatch(batch, workerID)
 					batch = batch[:0]
 				}
 			}
-			bs.flushBatch(batch)
-			bs.logger.Info("balance service: stopped")
+			bs.flushBatch(batch, workerID)
+			bs.logger.Infof("balance batch writer %d: stopped", workerID)
 			return
 
 		case update := <-bs.pendingWrites:
@@ -126,14 +128,14 @@ func (bs *BalanceService) batchWriter() {
 
 			// Flush if batch is full
 			if len(batch) >= constant.BalanceSyncBatchSize {
-				bs.flushBatch(batch)
+				bs.flushBatch(batch, workerID)
 				batch = batch[:0]
 			}
 
 		case <-ticker.C:
 			// Periodic flush
 			if len(batch) > 0 {
-				bs.flushBatch(batch)
+				bs.flushBatch(batch, workerID)
 				batch = batch[:0]
 			}
 		}
@@ -141,7 +143,7 @@ func (bs *BalanceService) batchWriter() {
 }
 
 // flushBatch writes a batch of updates to database in a single transaction
-func (bs *BalanceService) flushBatch(batch []*BalanceUpdate) {
+func (bs *BalanceService) flushBatch(batch []*BalanceUpdate, workerID int) {
 	if len(batch) == 0 {
 		return
 	}
@@ -155,7 +157,7 @@ func (bs *BalanceService) flushBatch(batch []*BalanceUpdate) {
 		smsLogs := make([]entity.SmsLog, len(batch))
 		for i, update := range batch {
 			smsLogs[i] = entity.SmsLog{
-				Id:         update.MsgID,
+				MessageId:  update.MsgID,
 				CustomerId: update.CustomerID,
 				ToNumber:   update.ToNumber,
 				Body:       update.Body,
@@ -199,10 +201,10 @@ func (bs *BalanceService) flushBatch(batch []*BalanceUpdate) {
 	elapsed := time.Since(start)
 
 	if err != nil {
-		bs.logger.Errorf("batch write failed (%d records, %v elapsed): %v", len(batch), elapsed, err)
+		bs.logger.Errorf("batch writer %d: write failed (%d records, %v elapsed): %v", workerID, len(batch), elapsed, err)
 		// TODO: retry logic or DLQ for failed batches
 	} else {
-		bs.logger.Infof("batch write successful: %d records synced to DB in %v", len(batch), elapsed)
+		bs.logger.Infof("batch writer %d: successful (%d records synced to DB in %v)", workerID, len(batch), elapsed)
 	}
 }
 
@@ -214,7 +216,7 @@ func (bs *BalanceService) writeSingleUpdate(update *BalanceUpdate) {
 	err := bs.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Insert SMS log
 		smsLog := entity.SmsLog{
-			Id:         update.MsgID,
+			MessageId:  update.MsgID,
 			CustomerId: update.CustomerID,
 			ToNumber:   update.ToNumber,
 			Body:       update.Body,
