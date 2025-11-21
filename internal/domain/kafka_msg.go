@@ -6,5 +6,4 @@ type KafkaMessage struct {
 	Topic   string
 	// onFailAttempted indicates how many times producers/workers attempted writes (optional)
 	Attempts int
-	Priority int
 }
