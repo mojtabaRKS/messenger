@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-func NewKafkaWriter(cfg config.Kafka) *kafka.Writer {
+func NewKafkaWriter(cfg config.Kafka, topic string) *kafka.Writer {
 	return &kafka.Writer{
 		Addr:         kafka.TCP(fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)),
-		Topic:        constant.TopicAccepted,
+		Topic:        topic,
 		Balancer:     &kafka.Hash{},
 		RequiredAcks: constant.KafkaProducerAcks,
 		Async:        false, // workers perform sync writes with timeout + retries
@@ -20,10 +20,10 @@ func NewKafkaWriter(cfg config.Kafka) *kafka.Writer {
 	}
 }
 
-func NewKafkaConsumer(cfg config.Kafka) *kafka.Reader {
+func NewKafkaConsumer(cfg config.Kafka, topic string) *kafka.Reader {
 	return kafka.NewReader(kafka.ReaderConfig{
 		Brokers:               []string{fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)},
-		Topic:                 constant.TopicAccepted,
+		Topic:                 topic,
 		GroupID:               constant.KafkaGroupID,
 		MinBytes:              1e3,  // 1KB
 		MaxBytes:              10e6, // 10MB

@@ -55,7 +55,8 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		}
 	}()
 
-	kafkaWriter := infra.NewKafkaWriter(cfg.Kafka)
+	kafkaWriterSmsAccepted := infra.NewKafkaWriter(cfg.Kafka, constant.TopicAccepted)
+	kafkaSmsStatusWriter := infra.NewKafkaWriter(cfg.Kafka, constant.TopicStatus)
 
 	// create repositories
 	planRepository := repository.NewPlanRepository(db)
@@ -77,7 +78,14 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		return
 	}
 
-	smsServiceInstance := smsService.NewSmsService(balanceServiceInstance, dlqRepository, redisClient, cmd.Logger, kafkaWriter)
+	smsServiceInstance := smsService.NewSmsService(
+		balanceServiceInstance,
+		dlqRepository,
+		redisClient,
+		cmd.Logger,
+		kafkaWriterSmsAccepted,
+		kafkaSmsStatusWriter,
+	)
 
 	// set plans in redis for get on demand
 	plans, err := planServiceInstance.GetAllPlansAndSetInRedis(ctx)

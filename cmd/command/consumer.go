@@ -2,6 +2,7 @@ package command
 
 import (
 	"arvan/message-gateway/internal/config"
+	"arvan/message-gateway/internal/constant"
 	"arvan/message-gateway/internal/domain"
 	"arvan/message-gateway/internal/infra"
 	"arvan/message-gateway/internal/provider"
@@ -9,6 +10,7 @@ import (
 	"arvan/message-gateway/internal/worker"
 	"context"
 	"encoding/json"
+	"github.com/segmentio/kafka-go"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,10 +35,11 @@ func (cmd ConsumerCommand) Command(ctx context.Context, cfg *config.Config) *cob
 func (cmd ConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 	queueManager := queue.NewQueueManager()
 	smsProvider := provider.NewStubProvider()
-	kafkaConsumer := infra.NewKafkaConsumer(cfg.Kafka)
-	pool := worker.NewWorkerPool(queueManager, smsProvider, cfg.WorkerCount)
+	kafkaConsumerSmsAccepted := infra.NewKafkaConsumer(cfg.Kafka, constant.TopicAccepted)
+	kafkaSmsStatusWriter := infra.NewKafkaWriter(cfg.Kafka, constant.TopicStatus)
+	pool := worker.NewWorkerPool(queueManager, smsProvider, cfg.WorkerCount, kafkaSmsStatusWriter)
 
-	pool.Start()
+	pool.Start(ctx)
 
 	// Start multiple consumer goroutines for parallel Kafka consumption
 	numConsumers := cfg.WorkerCount
@@ -48,7 +51,7 @@ func (cmd ConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 		consumerID := i
 		go func() {
 			for {
-				m, err := kafkaConsumer.ReadMessage(ctx)
+				m, err := kafkaConsumerSmsAccepted.ReadMessage(ctx)
 				if err != nil {
 					// If context cancelled, break
 					select {
@@ -76,8 +79,29 @@ func (cmd ConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 					CreatedAt:  time.Now(),
 				}
 
+				msg := struct {
+					domain.Job `json:",inline"`
+					Status     string `json:"status"`
+				}{
+					job,
+					"processing",
+				}
+
+				marshalled, err := json.Marshal(msg)
+				if err != nil {
+					cmd.Logger.WithContext(ctx).Warnf("kafka publish to status topic consumer_id [%d]:  error: %v", consumerID, err)
+				}
+
+				if err = kafkaSmsStatusWriter.WriteMessages(ctx, kafka.Message{
+					Key:   []byte(job.ID),
+					Value: marshalled,
+					Time:  time.Now(),
+				}); err != nil {
+					cmd.Logger.WithContext(ctx).Warnf("kafka publish to status topic consumer_id [%d]: error: %v", consumerID, err)
+				}
+
 				if err := queueManager.Enqueue(sms.CustomerId, job); err != nil {
-					cmd.Logger.WithContext(ctx).Warnf("kafka consumer %d: enqueue error: %v", consumerID, err)
+					cmd.Logger.WithContext(ctx).Errorf("kafka consumer %d: enqueue error: %v", consumerID, err)
 				}
 			}
 		}()
@@ -88,9 +112,9 @@ func (cmd ConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		cmd.Logger.WithContext(ctx).Info("kafka consumer: context done, shutting down...")
-		if err := kafkaConsumer.Close(); err != nil {
+		if err := kafkaConsumerSmsAccepted.Close(); err != nil {
 			cmd.Logger.WithContext(ctx).Errorf("kafka consumer: close error: %s", err.Error())
 		}
-		pool.Stop()
+		pool.Stop(ctx)
 	}
 }

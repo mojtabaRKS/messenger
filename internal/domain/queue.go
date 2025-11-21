@@ -12,7 +12,6 @@ type CustomerQueue interface {
 type QueueManager interface {
 	Enqueue(customerID int, job Job) error
 	Dequeue(customerID int) (Job, error)
-	Has(customerID int) bool
 	Len(customerID int) int
 
 	// SelectNextCustomer chooses the next available unlocked customer using a fair algorithm.

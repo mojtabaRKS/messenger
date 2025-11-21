@@ -2,17 +2,20 @@ package worker
 
 import (
 	"arvan/message-gateway/internal/domain"
+	"context"
+	"encoding/json"
+	"github.com/segmentio/kafka-go"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
 
 // worker executes in its own goroutine and processes jobs from queue manager one job at a time per customer.
-func (p *WorkerPool) worker(id int) {
+func (p *WorkerPool) worker(ctx context.Context, id int) {
 	defer p.wg.Done()
 
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-ctx.Done():
 			log.Printf("worker %d: context cancelled, exiting", id)
 			return
 		default:
@@ -23,7 +26,7 @@ func (p *WorkerPool) worker(id int) {
 		if !ok {
 			// wait for new jobs or backoff
 			select {
-			case <-p.ctx.Done():
+			case <-ctx.Done():
 				return
 			case <-time.After(100 * time.Millisecond):
 				continue
@@ -39,22 +42,49 @@ func (p *WorkerPool) worker(id int) {
 		}
 
 		// Process the job
-		p.processJob(id, job)
+		err = p.processJob(ctx, job)
+		if err != nil {
+			// requeue again for customer
+			// probably couldn't queue for analysis
+			err = p.qm.Enqueue(customerID, job)
+			if err != nil {
+				log.Printf("worker %d: enqueue job failed", id)
+			}
+			p.qm.UnlockCustomer(customerID)
+			continue
+		}
 
 		// Unlock the customer (allow other workers to process)
 		p.qm.UnlockCustomer(customerID)
 	}
 }
 
-func (p *WorkerPool) processJob(workerID int, job domain.Job) {
-	log.Printf("worker %d: processing job %s for customer %s (phone=%s)", workerID, job.ID, job.CustomerID, job.Phone)
-	start := time.Now()
+func (p *WorkerPool) processJob(ctx context.Context, job domain.Job) error {
 	err := p.provider.Send(job)
-	elapsed := time.Since(start)
-
 	if err != nil {
-		log.Printf("worker %d: job %s FAILED after %s: %v", workerID, job.ID, elapsed, err)
-	} else {
-		log.Printf("worker %d: job %s OK (elapsed=%s)", workerID, job.ID, elapsed)
+		return err
 	}
+
+	msg := struct {
+		domain.Job `json:",inline"`
+		Status     string `json:"status"`
+	}{
+		job,
+		"success",
+	}
+
+	marshalled, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	if err = p.kafkaSmsStatusWriter.WriteMessages(ctx, kafka.Message{
+		Key:   []byte(job.ID),
+		Value: marshalled,
+		Time:  time.Now(),
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }

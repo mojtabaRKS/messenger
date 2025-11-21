@@ -12,12 +12,13 @@ import (
 )
 
 type smsService struct {
-	balanceService balanceService
-	dlqRepository  dlqRepository
-	redisClient    *redis.Client
-	logger         *logrus.Logger
-	kafkaWriter    *kafka.Writer
-	kafkaWorkChan  chan domain.KafkaMessage
+	balanceService         balanceService
+	dlqRepository          dlqRepository
+	redisClient            *redis.Client
+	logger                 *logrus.Logger
+	kafkaWriterSmsAccepted *kafka.Writer
+	kafkaWriterSmsStatus   *kafka.Writer
+	kafkaWorkChan          chan domain.KafkaMessage
 }
 
 type balanceService interface {
@@ -33,14 +34,16 @@ func NewSmsService(
 	dlqRepo dlqRepository,
 	redisClient *redis.Client,
 	logger *logrus.Logger,
-	kafkaWriter *kafka.Writer,
+	kafkaWriterSmsAccepted *kafka.Writer,
+	kafkaWriterSmsStatus *kafka.Writer,
 ) *smsService {
 	return &smsService{
-		balanceService: balanceService,
-		dlqRepository:  dlqRepo,
-		redisClient:    redisClient,
-		logger:         logger,
-		kafkaWriter:    kafkaWriter,
-		kafkaWorkChan:  make(chan domain.KafkaMessage, constant.KafkaWorkerBufSize),
+		balanceService:         balanceService,
+		dlqRepository:          dlqRepo,
+		redisClient:            redisClient,
+		logger:                 logger,
+		kafkaWriterSmsAccepted: kafkaWriterSmsAccepted,
+		kafkaWriterSmsStatus:   kafkaWriterSmsStatus,
+		kafkaWorkChan:          make(chan domain.KafkaMessage, constant.KafkaWorkerBufSize),
 	}
 }

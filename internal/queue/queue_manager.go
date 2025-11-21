@@ -2,7 +2,6 @@ package queue
 
 import (
 	"arvan/message-gateway/internal/domain"
-	"time"
 )
 
 // Enqueue adds job into (or creates) the customer's queue and signals workers.
@@ -50,10 +49,6 @@ func (qm *QueueManager) Dequeue(customerID int) (domain.Job, error) {
 		qm.removeFromActive(customerID)
 	}
 	return job, nil
-}
-
-func (qm *QueueManager) Has(customerID int) bool {
-	return qm.Len(customerID) > 0
 }
 
 func (qm *QueueManager) Len(customerID int) int {
@@ -148,31 +143,3 @@ func (qm *QueueManager) removeFromActiveUnlocked(customerID int) {
 }
 
 func (e *QueueError) Error() string { return e.Msg }
-
-// StartBackgroundSweeper For development: helper to periodically sweep stale empty queues (optional)
-func (qm *QueueManager) StartBackgroundSweeper(stop <-chan struct{}, interval time.Duration) {
-	go func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-t.C:
-				qm.sweepEmpty()
-			}
-		}
-	}()
-}
-
-func (qm *QueueManager) sweepEmpty() {
-	qm.queues.Range(func(key, value interface{}) bool {
-		id := key.(int)
-		q := value.(domain.CustomerQueue)
-		if q.Len() == 0 {
-			// optional: remove entirely
-			qm.queues.Delete(id)
-		}
-		return true // continue iteration
-	})
-}
