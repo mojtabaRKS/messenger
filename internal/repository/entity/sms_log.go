@@ -1,18 +1,19 @@
 package entity
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"time"
 )
 
 type SmsLog struct {
-	Id         uuid.UUID
-	CustomerId int
-	ToNumber   string
-	Body       string
-	CreatedAt  time.Time
+	MessageId  uuid.UUID `gorm:"message_id"`
+	CustomerId int       `gorm:"customer_id"`
+	ToNumber   string    `gorm:"to_number"`
+	Body       string    `gorm:"body"`
+	CreatedAt  time.Time `gorm:"created_at"`
 }
 
 func (SmsLog) TableName() string {
-	return "sms_logs"
+	return fmt.Sprintf("sms_logs_%s", time.Now().Format("2006_01_02"))
 }

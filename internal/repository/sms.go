@@ -43,7 +43,7 @@ func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId
 		// append only sms log table if cost is affected
 		err = gorm.G[entity.SmsLog](tx).
 			Create(ctx, &entity.SmsLog{
-				Id:         msgId,
+				MessageId:  msgId,
 				CustomerId: customerId,
 				ToNumber:   receiver,
 				Body:       message,
