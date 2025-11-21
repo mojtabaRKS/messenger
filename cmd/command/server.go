@@ -65,7 +65,13 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	planServiceInstance := plan.NewPlanService(planRepository, redisClient)
 
 	// Initialize balance service with Redis cache
-	balanceServiceInstance := balanceService.NewBalanceService(redisClient, db, cmd.Logger)
+	balanceServiceInstance := balanceService.NewBalanceService(
+		redisClient,
+		db,
+		cmd.Logger,
+		constant.BalanceQueueSize,
+		constant.BalanceWriterWorkers,
+	)
 	if err := balanceServiceInstance.InitializeBalanceCache(ctx); err != nil {
 		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to initialize balance cache"))
 		return
