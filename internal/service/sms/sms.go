@@ -58,7 +58,6 @@ func (ss *smsService) Send(ctx context.Context, priority, customerId int, req re
 // ProduceMessages is a worker that processes messages from the channel synchronously.
 // Multiple workers run in parallel (configured by KafkaWriteWorkerPool constant).
 func (ss *smsService) ProduceMessages(workerID int) {
-	ss.logger.Infof("kafka producer worker %d: started", workerID)
 	for km := range ss.kafkaWorkChan {
 		// Process synchronously in worker (no goroutine spawn)
 		success := false
@@ -85,5 +84,4 @@ func (ss *smsService) ProduceMessages(workerID int) {
 			}
 		}
 	}
-	ss.logger.Infof("kafka producer worker %d: stopped", workerID)
 }
