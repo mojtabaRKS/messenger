@@ -19,6 +19,7 @@ import (
 	"arvan/message-gateway/internal/api/handler/sms"
 	"arvan/message-gateway/internal/config"
 	"arvan/message-gateway/internal/infra"
+	balanceService "arvan/message-gateway/internal/service/balance"
 )
 
 type Server struct {
@@ -59,11 +60,18 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	// create repositories
 	planRepository := repository.NewPlanRepository(db)
 	dlqRepository := repository.NewDlqRepository(db)
-	smsRepository := repository.NewSmsRepository(db)
 
 	// create services
 	planServiceInstance := plan.NewPlanService(planRepository, redisClient)
-	smsServiceInstance := smsService.NewSmsService(smsRepository, dlqRepository, redisClient, cmd.Logger, kafkaWriter)
+
+	// Initialize balance service with Redis cache
+	balanceServiceInstance := balanceService.NewBalanceService(redisClient, db, cmd.Logger)
+	if err := balanceServiceInstance.InitializeBalanceCache(ctx); err != nil {
+		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to initialize balance cache"))
+		return
+	}
+
+	smsServiceInstance := smsService.NewSmsService(balanceServiceInstance, dlqRepository, redisClient, cmd.Logger, kafkaWriter)
 
 	// set plans in redis for get on demand
 	plans, err := planServiceInstance.GetAllPlansAndSetInRedis(ctx)
@@ -99,10 +107,18 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		priorityMiddleware,
 	)
 
-	// start background kafka workers
-	for i := 0; i < constant.KafkaWorkerCount; i++ {
+	// start background kafka workers (using worker pool pattern)
+	for i := 0; i < constant.KafkaWriteWorkerPool; i++ {
 		go smsServiceInstance.ProduceMessages(i)
 	}
+	cmd.Logger.WithContext(ctx).Infof("started %d kafka producer workers", constant.KafkaWriteWorkerPool)
+
+	// Graceful shutdown handler
+	defer func() {
+		cmd.Logger.Info("shutting down balance service...")
+		balanceServiceInstance.Stop()
+		cmd.Logger.Info("balance service stopped")
+	}()
 
 	// run the server
 	if err := server.Serve(ctx, fmt.Sprintf(":%d", cfg.HTTP.Port)); err != nil {
