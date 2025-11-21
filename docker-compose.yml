@@ -58,11 +58,33 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    container_name: messenger_clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-messenger}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-messenger}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-messenger}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
 volumes:
   postgres_data:
   redis_data:
   zookeeper_data:
   zookeeper_logs:
   kafka_data:
+  clickhouse_data:
+  clickhouse_logs:
 
 
