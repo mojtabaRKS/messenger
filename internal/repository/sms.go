@@ -29,7 +29,7 @@ func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId
 
 	err := sr.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		rowsAffected, err := gorm.G[entity.Balance](tx).
-			Where("customer_id = ? AND balance_bigint >= ?").
+			Where("customer_id = ? AND balance_bigint >= ?", customerId, 10).
 			// we assume every sms is cost 10 rials
 			Update(ctx, "balance_bigint", gorm.Expr("balance_bigint - ?", 10))
 		if rowsAffected == 0 {

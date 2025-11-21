@@ -28,7 +28,6 @@ func (dr *dlqRepository) InsertDLQ(ctx context.Context, km domain.KafkaMessage) 
 		Key:           km.Key,
 		Payload:       km.Payload,
 		AttemptCount:  km.Attempts,
-		Priority:      km.Priority,
 		LastAttemptAt: time.Now(),
 	})
 }
