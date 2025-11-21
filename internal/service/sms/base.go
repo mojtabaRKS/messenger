@@ -4,6 +4,7 @@ import (
 	"arvan/message-gateway/internal/constant"
 	"arvan/message-gateway/internal/domain"
 	"context"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -11,18 +12,16 @@ import (
 )
 
 type smsService struct {
-	smsRepository smsRepository
-	dlqRepository dlqRepository
-	redisClient   *redis.Client
-	logger        *logrus.Logger
-	kafkaWriter   *kafka.Writer
-	data          map[string]int
-	kafkaWorkChan chan domain.KafkaMessage
-	dataChecksum  string
+	balanceService balanceService
+	dlqRepository  dlqRepository
+	redisClient    *redis.Client
+	logger         *logrus.Logger
+	kafkaWriter    *kafka.Writer
+	kafkaWorkChan  chan domain.KafkaMessage
 }
 
-type smsRepository interface {
-	DeductBalanceAndSaveSms(ctx context.Context, customerId int, message, receiver string) (uuid.UUID, error)
+type balanceService interface {
+	DeductBalanceAndQueueSms(ctx context.Context, customerId int, message, receiver string) (uuid.UUID, error)
 }
 
 type dlqRepository interface {
@@ -30,18 +29,18 @@ type dlqRepository interface {
 }
 
 func NewSmsService(
-	smsRepository smsRepository,
+	balanceService balanceService,
 	dlqRepo dlqRepository,
 	redisClient *redis.Client,
 	logger *logrus.Logger,
 	kafkaWriter *kafka.Writer,
 ) *smsService {
 	return &smsService{
-		smsRepository: smsRepository,
-		dlqRepository: dlqRepo,
-		redisClient:   redisClient,
-		logger:        logger,
-		kafkaWriter:   kafkaWriter,
-		kafkaWorkChan: make(chan domain.KafkaMessage, constant.KafkaWorkerBufSize),
+		balanceService: balanceService,
+		dlqRepository:  dlqRepo,
+		redisClient:    redisClient,
+		logger:         logger,
+		kafkaWriter:    kafkaWriter,
+		kafkaWorkChan:  make(chan domain.KafkaMessage, constant.KafkaWorkerBufSize),
 	}
 }

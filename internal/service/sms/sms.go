@@ -4,42 +4,40 @@ import (
 	"arvan/message-gateway/internal/constant"
 	"arvan/message-gateway/internal/domain"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
-	"github.com/pkg/errors"
-	"github.com/segmentio/kafka-go"
 	"strconv"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/segmentio/kafka-go"
 
 	"arvan/message-gateway/internal/api/request"
 )
 
 func (ss *smsService) Send(ctx context.Context, priority, customerId int, req request.SendSmsRequest) error {
-	msgId, err := ss.smsRepository.DeductBalanceAndSaveSms(ctx, customerId, req.Message, req.PhoneNumber)
+	// Fast Redis-based balance deduction (no DB transaction on critical path)
+	msgId, err := ss.balanceService.DeductBalanceAndQueueSms(ctx, customerId, req.Message, req.PhoneNumber)
 	if err != nil {
 		return err
 	}
 
-	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%s:%s", req.PhoneNumber, req.Message)))
-	hashed := h.Sum(nil)
-
-	// prepare Kafka payload
-	payload := map[string]interface{}{
-		"message_id":  msgId.String(),
-		"customer_id": customerId,
-		"to":          req.PhoneNumber,
-		"created_at":  time.Now().UTC().Format(time.RFC3339Nano),
-		"body_hash":   string(hashed),
+	payload := domain.Sms{
+		MessageId:  msgId.String(),
+		CustomerId: customerId,
+		To:         req.PhoneNumber,
+		Priority:   priority,
+		Message:    req.Message,
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	b, _ := json.Marshal(payload)
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal payload")
+	}
 	kmsg := domain.KafkaMessage{
 		Key:      strconv.Itoa(customerId),
 		Payload:  b,
-		Topic:    constant.KafkaTopic,
+		Topic:    constant.TopicAccepted,
 		Attempts: 0,
-		Priority: priority,
 	}
 
 	// Non-blocking enqueue to background workers. If the channel is full, we synchronously write to kafka_dlq
@@ -57,35 +55,35 @@ func (ss *smsService) Send(ctx context.Context, priority, customerId int, req re
 	return nil
 }
 
+// ProduceMessages is a worker that processes messages from the channel synchronously.
+// Multiple workers run in parallel (configured by KafkaWriteWorkerPool constant).
 func (ss *smsService) ProduceMessages(workerID int) {
+	ss.logger.Infof("kafka producer worker %d: started", workerID)
 	for km := range ss.kafkaWorkChan {
-		// run every message in separate goroutine
-		go func() {
-			// attempt sync write with retries
-			success := false
-			for attempt := 0; attempt < constant.KafkaWriteRetries; attempt++ {
-				ctx, cancel := context.WithTimeout(context.Background(), constant.KafkaWriteTimeout)
-				err := ss.kafkaWriter.WriteMessages(ctx, kafka.Message{
-					Key:   []byte(km.Key),
-					Value: km.Payload,
-					Time:  time.Now(),
-				})
-				cancel()
-				if err == nil {
-					success = true
-					break
-				}
-				ss.logger.Printf("kafka write attempt %d failed: %v", attempt+1, err)
-				time.Sleep(constant.KafkaRetryBackoff * time.Duration(attempt+1))
+		// Process synchronously in worker (no goroutine spawn)
+		success := false
+		for attempt := 0; attempt < constant.KafkaWriteRetries; attempt++ {
+			ctx, cancel := context.WithTimeout(context.Background(), constant.KafkaWriteTimeout)
+			err := ss.kafkaWriter.WriteMessages(ctx, kafka.Message{
+				Key:   []byte(km.Key),
+				Value: km.Payload,
+				Time:  time.Now(),
+			})
+			cancel()
+			if err == nil {
+				success = true
+				break
 			}
-			if !success {
-				// push to DLQ in DB (non-blocking background insert)
-				km.Attempts += constant.KafkaWriteRetries
-				if err := ss.dlqRepository.InsertDLQ(context.Background(), km); err != nil {
-					// Very rare: DLQ insert failed. Log and continue.
-					ss.logger.Printf("kafka worker %d: failed to insert dlq: %v", workerID, err)
-				}
+			ss.logger.Warnf("kafka worker %d: write attempt %d failed: %v", workerID, attempt+1, err)
+			time.Sleep(constant.KafkaRetryBackoff * time.Duration(attempt+1))
+		}
+		if !success {
+			// push to DLQ in DB
+			km.Attempts += constant.KafkaWriteRetries
+			if err := ss.dlqRepository.InsertDLQ(context.Background(), km); err != nil {
+				ss.logger.Errorf("kafka worker %d: failed to insert dlq: %v", workerID, err)
 			}
-		}()
+		}
 	}
+	ss.logger.Infof("kafka producer worker %d: stopped", workerID)
 }
