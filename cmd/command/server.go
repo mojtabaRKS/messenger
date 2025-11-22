@@ -37,7 +37,7 @@ func (cmd Server) Command(ctx context.Context, cfg *config.Config) *cobra.Comman
 }
 
 func (cmd Server) main(cfg *config.Config, ctx context.Context) {
-	db, err := infra.NewPostgresClient(ctx, cfg.Database.Postgres)
+	psql, err := infra.NewPostgresClient(ctx, cfg.Database.Postgres)
 	if err != nil {
 		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to postgresql"))
 		return
@@ -59,8 +59,8 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	kafkaSmsStatusWriter := infra.NewKafkaWriter(cfg.Kafka, constant.TopicStatus)
 
 	// create repositories
-	planRepository := repository.NewPlanRepository(db)
-	dlqRepository := repository.NewDlqRepository(db)
+	planRepository := repository.NewPlanRepository(psql.GetDb())
+	dlqRepository := repository.NewDlqRepository(psql.GetDb())
 
 	// create services
 	planServiceInstance := plan.NewPlanService(planRepository, redisClient)
@@ -68,7 +68,7 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	// Initialize balance service with Redis cache
 	balanceServiceInstance := balanceService.NewBalanceService(
 		redisClient,
-		db,
+		psql.GetDb(),
 		cmd.Logger,
 		constant.BalanceQueueSize,
 		constant.BalanceWriterWorkers,

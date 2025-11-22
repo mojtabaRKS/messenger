@@ -10,20 +10,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// BalanceService provides fast balance operations using Redis cache with DB persistence
 type BalanceService struct {
-	redisClient *redis.Client
-	db          *gorm.DB
-	logger      *logrus.Logger
-
-	// Batch write queue
+	redisClient   *redis.Client
+	db            *gorm.DB
+	logger        *logrus.Logger
 	pendingWrites chan *BalanceUpdate
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
-	numWorkers    int // number of parallel batch writer workers
-
-	// Pre-compiled Lua script for atomic balance deduction
-	deductScript *redis.Script
+	numWorkers    int
+	deductScript  *redis.Script
 }
 
 type BalanceUpdate struct {
@@ -34,7 +29,6 @@ type BalanceUpdate struct {
 	Timestamp  time.Time
 }
 
-// Lua script for atomic balance deduction (prevents race conditions)
 var deductBalanceLua = redis.NewScript(`
 	local key = KEYS[1]
 	local deduction = tonumber(ARGV[1])
@@ -48,7 +42,6 @@ var deductBalanceLua = redis.NewScript(`
 	end
 `)
 
-// NewBalanceService creates a new balance service with Redis caching
 func NewBalanceService(
 	redisClient *redis.Client,
 	db *gorm.DB,
@@ -66,7 +59,6 @@ func NewBalanceService(
 		numWorkers:    numWorkers,
 	}
 
-	// Start multiple batch writer goroutines for higher throughput
 	for i := 0; i < numWorkers; i++ {
 		bs.wg.Add(1)
 		go bs.batchWriter(i)
@@ -75,7 +67,6 @@ func NewBalanceService(
 	return bs
 }
 
-// Stop gracefully stops the balance service
 func (bs *BalanceService) Stop() {
 	close(bs.stopCh)
 	bs.wg.Wait()

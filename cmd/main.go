@@ -28,6 +28,7 @@ func main() {
 	root.AddCommand(
 		command.Server{Logger: logger}.Command(ctx, cfg),
 		command.ConsumerCommand{Logger: logger}.Command(ctx, cfg),
+		command.StatusConsumerCommand{Logger: logger}.Command(ctx, cfg),
 		command.MigrateCommand{Logger: logger}.Command(ctx, cfg),
 	)
 

@@ -11,12 +11,15 @@ import (
 	migratePsql "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
-	log "github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-func NewPostgresClient(ctx context.Context, cfg config.Postgres) (*gorm.DB, error) {
+type PostgresClient struct {
+	db *gorm.DB
+}
+
+func NewPostgresClient(ctx context.Context, cfg config.Postgres) (*PostgresClient, error) {
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
 		cfg.Host,
@@ -30,11 +33,15 @@ func NewPostgresClient(ctx context.Context, cfg config.Postgres) (*gorm.DB, erro
 		return nil, err
 	}
 
-	return db.WithContext(ctx), nil
+	return &PostgresClient{db: db.WithContext(ctx)}, nil
 }
 
-func MigrateUp(gormDB *gorm.DB, dbName string, logger *log.Logger) error {
-	m, err := prepareConnection(gormDB, dbName, logger)
+func (p *PostgresClient) GetDb() *gorm.DB {
+	return p.db
+}
+
+func (p *PostgresClient) MigrateUp(dbName string) error {
+	m, err := p.prepareConnection(dbName)
 	if err != nil {
 		return err
 	}
@@ -43,12 +50,11 @@ func MigrateUp(gormDB *gorm.DB, dbName string, logger *log.Logger) error {
 		return err
 	}
 
-	logger.Info("migrations applied successfully")
 	return nil
 }
 
-func MigrateDown(gormDB *gorm.DB, dbName string, logger *log.Logger) error {
-	m, err := prepareConnection(gormDB, dbName, logger)
+func (p *PostgresClient) MigrateDown(dbName string) error {
+	m, err := p.prepareConnection(dbName)
 	if err != nil {
 		return err
 	}
@@ -57,12 +63,11 @@ func MigrateDown(gormDB *gorm.DB, dbName string, logger *log.Logger) error {
 		return err
 	}
 
-	logger.Info("migrations applied successfully")
 	return nil
 }
 
-func prepareConnection(gormDB *gorm.DB, dbName string, logger *log.Logger) (*migrate.Migrate, error) {
-	conn, err := gormDB.DB()
+func (p *PostgresClient) prepareConnection(dbName string) (*migrate.Migrate, error) {
+	conn, err := p.db.DB()
 	if err != nil {
 		return nil, err
 	}
@@ -72,9 +77,7 @@ func prepareConnection(gormDB *gorm.DB, dbName string, logger *log.Logger) (*mig
 		return nil, err
 	}
 
-	logger.Info("migrations started")
-
-	m, err := migrate.NewWithDatabaseInstance("file://migrations", dbName, driver)
+	m, err := migrate.NewWithDatabaseInstance("file://migrations/postgres", dbName, driver)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create migrations instance")
 	}

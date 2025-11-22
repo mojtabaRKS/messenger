@@ -24,6 +24,6 @@ func (s *StubProvider) Send(job domain.Job) error {
 	}
 
 	// print success message
-	fmt.Print("Sms sent successfully")
+	fmt.Printf("Sms sent successfully for job %s. receiver :%d \n", job.ID, job.CustomerID)
 	return nil
 }

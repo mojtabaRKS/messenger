@@ -48,6 +48,13 @@ func Load() (*Config, error) {
 				Password: viper.GetString("REDIS_PASSWORD"),
 				Database: viper.GetInt("REDIS_DB"),
 			},
+			ClickHouse: ClickHouse{
+				Host:     viper.GetString("CLICKHOUSE_HOST"),
+				Port:     viper.GetInt("CLICKHOUSE_PORT"),
+				Database: viper.GetString("CLICKHOUSE_DB"),
+				Username: viper.GetString("CLICKHOUSE_USER"),
+				Password: viper.GetString("CLICKHOUSE_PASSWORD"),
+			},
 		},
 		Kafka: Kafka{
 			Host: viper.GetString("KAFKA_HOST"),

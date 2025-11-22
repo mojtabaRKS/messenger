@@ -27,8 +27,9 @@ type (
 	}
 
 	Database struct {
-		Postgres Postgres
-		Redis    Redis
+		Postgres   Postgres
+		Redis      Redis
+		ClickHouse ClickHouse
 	}
 
 	Postgres struct {
@@ -37,6 +38,14 @@ type (
 		Username string
 		Password string
 		Database string
+	}
+
+	ClickHouse struct {
+		Host     string
+		Port     int
+		Database string
+		Username string
+		Password string
 	}
 
 	Redis struct {

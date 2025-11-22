@@ -35,20 +35,40 @@ func (cmd MigrateCommand) main(cfg *config.Config, ctx context.Context, args []s
 		return
 	}
 
+	clickhouse, err := infra.NewClickHouseClient(cfg.Database.ClickHouse)
+	if err != nil {
+		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to clickhouse"))
+		return
+	}
+
 	migrationCommand := args[0]
 	switch migrationCommand {
 	case "up":
-		err = infra.MigrateUp(psql, cfg.Database.Postgres.Database, cmd.Logger)
+		err = psql.MigrateUp(cfg.Database.Postgres.Database)
 		if err != nil {
 			cmd.Logger.WithContext(ctx).Fatal(err)
 			return
 		}
+
+		err := clickhouse.MigrateUp(cfg.Database.ClickHouse.Database)
+		if err != nil {
+			cmd.Logger.WithContext(ctx).Fatal(err)
+			return
+		}
+
 	case "down":
-		err = infra.MigrateDown(psql, cfg.Database.Postgres.Database, cmd.Logger)
+		err = psql.MigrateDown(cfg.Database.Postgres.Database)
 		if err != nil {
 			cmd.Logger.WithContext(ctx).Fatal(err)
 			return
 		}
+
+		err = clickhouse.MigrateDown(cfg.Database.ClickHouse.Database)
+		if err != nil {
+			cmd.Logger.WithContext(ctx).Fatal(err)
+			return
+		}
+
 	default:
 		cmd.Logger.WithContext(ctx).Fatal(errors.Errorf("migration command : %s is not supported", migrationCommand))
 	}

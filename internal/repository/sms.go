@@ -8,15 +8,21 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
+	"time"
 )
 
 type smsRepository struct {
-	db *gorm.DB
+	postgres   *gorm.DB
+	clickhouse *gorm.DB
 }
 
-func NewSmsRepository(db *gorm.DB) *smsRepository {
+func NewSmsRepository(
+	postgres *gorm.DB,
+	clickhouse *gorm.DB,
+) *smsRepository {
 	return &smsRepository{
-		db: db,
+		postgres:   postgres,
+		clickhouse: clickhouse,
 	}
 }
 
@@ -27,7 +33,7 @@ func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId
 	ctx, cancel := context.WithTimeout(ctx, constant.DBTxTimeout)
 	defer cancel()
 
-	err := sr.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := sr.postgres.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		rowsAffected, err := gorm.G[entity.Balance](tx).
 			Where("customer_id = ? AND balance_bigint >= ?", customerId, 10).
 			// we assume every sms is cost 10 rials
@@ -65,4 +71,23 @@ func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId
 	}
 
 	return msgId, nil
+}
+
+func (sr *smsRepository) InsertSMSStatus(ctx context.Context, jobID, customerID string, phone, message, status string, priority int, createdAt time.Time, timestamp time.Time) error {
+	err := gorm.G[entity.SMSStatusLog](sr.clickhouse).Create(ctx, &entity.SMSStatusLog{
+		JobID:      jobID,
+		CustomerID: customerID,
+		Phone:      phone,
+		Message:    message,
+		Status:     status,
+		Priority:   int32(priority),
+		CreatedAt:  createdAt,
+		Timestamp:  timestamp,
+	})
+
+	if err != nil {
+		return errors.Wrap(err, "failed to insert SMS status")
+	}
+
+	return nil
 }
