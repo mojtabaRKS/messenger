@@ -78,6 +78,19 @@ services:
         soft: 262144
         hard: 262144
 
+  magic:
+    image: "digitsy/kafka-magic"
+    ports:
+      - "8997:80"
+    volumes:
+      - .:/config
+    environment:
+      KMAGIC_ALLOW_TOPIC_DELETE: "true"
+      KMAGIC_ALLOW_SCHEMA_DELETE: "true"
+      KMAGIC_CONFIG_STORE_TYPE: "file"
+      KMAGIC_CONFIG_STORE_CONNECTION: "Data Source=/config/KafkaMagicConfig.db;"
+      KMAGIC_CONFIG_ENCRYPTION_KEY: "ENTER_YOUR_KEY_HERE"
+
 volumes:
   postgres_data:
   redis_data:
