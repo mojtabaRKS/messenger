@@ -8,7 +8,6 @@ import (
 	"arvan/message-gateway/internal/repository"
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -30,13 +29,11 @@ func (cmd StatusConsumerCommand) Command(ctx context.Context, cfg *config.Config
 }
 
 func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
-	// Initialize ClickHouse client
 	clickhouseDb, err := infra.NewClickHouseClient(cfg.Database.ClickHouse)
 	if err != nil {
 		cmd.Logger.WithContext(ctx).Fatalf("failed to initialize ClickHouse client: %v", err)
 	}
 
-	// Initialize Kafka consumer for sms.status topic
 	kafkaConsumerSmsStatus := infra.NewKafkaConsumer(cfg.Kafka, constant.TopicStatus)
 	defer func() {
 		if err := kafkaConsumerSmsStatus.Close(); err != nil {
@@ -44,21 +41,17 @@ func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 		}
 	}()
 
-	// create repository
 	smsRepo := repository.NewSmsRepository(nil, clickhouseDb.GetDb())
 
-	// Start consumer goroutines
 	numConsumers := cfg.WorkerCount
 	if numConsumers == 0 {
-		numConsumers = 4 // default
+		numConsumers = 4
 	}
 
 	cmd.Logger.WithContext(ctx).Infof("starting %d consumer goroutines for sms.status topic", numConsumers)
 
-	// Channel for processing messages
 	msgChan := make(chan domain.SMSStatus, 1000)
 
-	// Start consumer goroutines
 	for i := 0; i < numConsumers; i++ {
 		consumerID := i
 		go func() {
@@ -86,7 +79,6 @@ func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 						continue
 					}
 
-					// Send to processing channel (blocks if full - provides backpressure)
 					select {
 					case msgChan <- status:
 					case <-ctx.Done():
@@ -97,7 +89,6 @@ func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 		}()
 	}
 
-	// Start writer goroutines for batch insertion
 	numWriters := 4
 	for i := 0; i < numWriters; i++ {
 		writerID := i
@@ -118,7 +109,7 @@ func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 					err := smsRepo.InsertSMSStatus(
 						insertCtx,
 						status.ID,
-						fmt.Sprintf("%d", status.CustomerID),
+						status.CustomerID,
 						status.Phone,
 						status.Message,
 						status.Status,
@@ -129,6 +120,8 @@ func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 					if err != nil {
 						cmd.Logger.WithContext(ctx).Errorf("writer %d: failed to insert status: %v", writerID, err)
 					}
+
+					cmd.Logger.WithContext(ctx).Info("writer %d: insert status: %v", writerID, status.ID)
 				}
 
 				cmd.Logger.WithContext(ctx).Debugf("writer %d: flushed %d messages to ClickHouse", writerID, len(batch))
@@ -155,8 +148,7 @@ func (cmd StatusConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 
 	cmd.Logger.WithContext(ctx).Info("status consumer started successfully")
 
-	// Wait for shutdown signal
 	<-ctx.Done()
 	cmd.Logger.WithContext(ctx).Info("status consumer: shutting down gracefully...")
-	time.Sleep(2 * time.Second) // Give time for final flushes
+	time.Sleep(2 * time.Second)
 }

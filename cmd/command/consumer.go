@@ -41,10 +41,9 @@ func (cmd ConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 
 	pool.Start(ctx)
 
-	// Start multiple consumer goroutines for parallel Kafka consumption
 	numConsumers := cfg.WorkerCount
 	if numConsumers == 0 {
-		numConsumers = 10 // default
+		numConsumers = 10
 	}
 
 	for i := 0; i < numConsumers; i++ {
@@ -53,7 +52,6 @@ func (cmd ConsumerCommand) main(cfg *config.Config, ctx context.Context) {
 			for {
 				m, err := kafkaConsumerSmsAccepted.ReadMessage(ctx)
 				if err != nil {
-					// If context cancelled, break
 					select {
 					case <-ctx.Done():
 						return

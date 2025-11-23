@@ -2,7 +2,6 @@ package domain
 
 import "time"
 
-// SMSStatus represents the status message from Kafka topic
 type SMSStatus struct {
 	ID         string    `json:"ID"`
 	CustomerID int       `json:"CustomerID"`

@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// worker executes in its own goroutine and processes jobs from queue manager one job at a time per customer.
 func (p *WorkerPool) worker(ctx context.Context, id int) {
 	defer p.wg.Done()
 

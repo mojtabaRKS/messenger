@@ -41,13 +41,11 @@ func NewPriorityMiddleware(
 		stopCh:       make(chan struct{}),
 	}
 
-	// Start background refresh goroutine
 	go pm.backgroundRefresh()
 
 	return pm
 }
 
-// Stop gracefully stops the background refresh
 func (m *PriorityMiddleware) Stop() {
 	close(m.stopCh)
 }
@@ -73,7 +71,6 @@ func (m *PriorityMiddleware) Handle(c *gin.Context) {
 	c.Next()
 }
 
-// backgroundRefresh runs in background and refreshes plan data every 5 minutes
 func (m *PriorityMiddleware) backgroundRefresh() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -104,16 +101,14 @@ func (m *PriorityMiddleware) refreshPlans() error {
 	h.Write([]byte(redisData))
 	hashed := h.Sum(nil)
 
-	// Check if data changed
 	m.mu.RLock()
 	currentChecksum := m.dataChecksum
 	m.mu.RUnlock()
 
 	if currentChecksum == string(hashed) {
-		return nil // No changes
+		return nil
 	}
 
-	// Fetch fresh data
 	plans, err := m.planService.GetAllPlansAndSetInRedis(ctx)
 	if err != nil {
 		return err
@@ -128,7 +123,6 @@ func (m *PriorityMiddleware) refreshPlans() error {
 	h.Write(marshalled)
 	newHash := h.Sum(nil)
 
-	// Update with write lock
 	m.mu.Lock()
 	m.data = plans
 	m.dataChecksum = string(newHash)

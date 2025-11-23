@@ -19,7 +19,6 @@ func NewDlqRepository(db *gorm.DB) *dlqRepository {
 }
 
 func (dr *dlqRepository) InsertDLQ(ctx context.Context, km domain.KafkaMessage) error {
-	// lightweight insert to kafka_dlq. Use background context if incoming ctx is short.
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 

@@ -14,7 +14,7 @@ func NewKafkaWriter(cfg config.Kafka, topic string) *kafka.Writer {
 		Topic:        topic,
 		Balancer:     &kafka.Hash{},
 		RequiredAcks: constant.KafkaProducerAcks,
-		Async:        false, // workers perform sync writes with timeout + retries
+		Async:        false,
 		BatchTimeout: 10 * time.Millisecond,
 		BatchSize:    1024,
 	}

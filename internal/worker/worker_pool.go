@@ -13,7 +13,6 @@ func (p *WorkerPool) Start(ctx context.Context) {
 	log.Printf("worker pool: started %d workers", p.numWorkers)
 }
 
-// Stop gracefully stops all workers and waits.
 func (p *WorkerPool) Stop(ctx context.Context) {
 	_, cancel := context.WithCancel(ctx)
 	defer cancel()

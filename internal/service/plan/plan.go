@@ -17,7 +17,6 @@ func (ps *planService) GetAllPlansAndSetInRedis(ctx context.Context) (map[string
 		data[plan.ApiKey] = plan.Priority
 	}
 
-	// Marshal the map to JSON before storing in Redis
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, err

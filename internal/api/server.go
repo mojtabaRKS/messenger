@@ -43,7 +43,6 @@ func (s *Server) Serve(ctx context.Context, address string) error {
 
 	select {
 	case <-ctx.Done():
-		// graceful shutdown
 		log.Info("rest server is shutting down")
 		return srv.Shutdown(ctx)
 	case err := <-srvError:

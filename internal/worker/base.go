@@ -7,7 +7,6 @@ import (
 	"sync"
 )
 
-// WorkerPool coordinates a set of workers that process jobs.
 type WorkerPool struct {
 	qm         domain.QueueManager
 	provider   provider.SMSProvider
@@ -17,7 +16,6 @@ type WorkerPool struct {
 	kafkaSmsStatusWriter *kafka.Writer
 }
 
-// NewWorkerPool constructs a pool that will use provided QueueManager and SMSProvider.
 func NewWorkerPool(
 	qm domain.QueueManager,
 	prov provider.SMSProvider,
