@@ -3,7 +3,7 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: messenger_postgres
+    container_name: postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-messenger}
@@ -16,9 +16,16 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: messenger_redis
+    container_name: redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: 
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --stop-writes-on-bgsave-error
+      - "no"
+      - --save
+      - ""
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -26,7 +33,7 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: messenger_zookeeper
+    container_name: zookeeper
     restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -39,7 +46,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: messenger_kafka
+    container_name: kafka
     restart: unless-stopped
     depends_on:
       - zookeeper
@@ -60,7 +67,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24-alpine
-    container_name: messenger_clickhouse
+    container_name: clickhouse
     restart: unless-stopped
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-messenger}
@@ -83,13 +90,89 @@ services:
     ports:
       - "8997:80"
     volumes:
-      - .:/config
+      - magic_data:/config
     environment:
       KMAGIC_ALLOW_TOPIC_DELETE: "true"
       KMAGIC_ALLOW_SCHEMA_DELETE: "true"
       KMAGIC_CONFIG_STORE_TYPE: "file"
       KMAGIC_CONFIG_STORE_CONNECTION: "Data Source=/config/KafkaMagicConfig.db;"
       KMAGIC_CONFIG_ENCRYPTION_KEY: "ENTER_YOUR_KEY_HERE"
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: server
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - clickhouse
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./logs:/app/logs
+      - .env:/app/.env
+    command: ["./messenger", "server"]
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: consumer
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - clickhouse
+    volumes:
+      - ./logs:/app/logs
+      - .env:/app/.env
+    command: ["./messenger", "consume"]
+
+  status_consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: status_consumer
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - clickhouse
+    volumes:
+      - ./logs:/app/logs
+      - .env:/app/.env
+    command: ["./messenger", "consume-status"]
+
+  tester:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tester
+    profiles:
+      - tools
+    volumes:
+      - ./logs:/app/logs
+      - .env:/app/.env
+    command: ["sh", "-c", "echo 'Tester container ready.' && tail -f /dev/null"]
+
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: migrator
+    profiles:
+      - tools
+    depends_on:
+      - postgres
+      - clickhouse
+    volumes:
+      - .env:/app/.env
+    command: ["sh", "-c", "echo 'Migrator container ready.' && tail -f /dev/null"]
 
 volumes:
   postgres_data:
@@ -99,5 +182,6 @@ volumes:
   kafka_data:
   clickhouse_data:
   clickhouse_logs:
+  magic_data:
 
 
