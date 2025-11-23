@@ -17,12 +17,3 @@ CREATE TABLE sms_logs_2025_11_25 PARTITION OF sms_logs FOR VALUES FROM ('2025-11
 CREATE TABLE sms_logs_2025_11_26 PARTITION OF sms_logs FOR VALUES FROM ('2025-11-26') TO ('2025-11-27');
 CREATE TABLE sms_logs_2025_11_27 PARTITION OF sms_logs FOR VALUES FROM ('2025-11-27') TO ('2025-11-28');
 CREATE TABLE sms_logs_2025_11_28 PARTITION OF sms_logs FOR VALUES FROM ('2025-11-28') TO ('2025-11-29');
-
-CREATE TABLE sms_status_events
-(
-    id          BIGSERIAL PRIMARY KEY,
-    message_id  UUID        NOT NULL,
-    status      TEXT        NOT NULL,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    operator_id TEXT NULL
-);

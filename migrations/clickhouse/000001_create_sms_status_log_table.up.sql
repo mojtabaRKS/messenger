@@ -1,11 +1,11 @@
 CREATE TABLE IF NOT EXISTS sms_status_log
 (
-    job_id String,
-    customer_id String,
+    id String,
+    customer_id Int,
     phone String,
     message String,
     status String,
-    priority Int32,
+    priority Int,
     created_at DateTime,
     timestamp DateTime
 ) ENGINE = MergeTree()
