@@ -1,0 +1,28 @@
+package api
+
+import (
+	"arvan/message-gateway/internal/api/handler/sms"
+	"arvan/message-gateway/internal/api/middleware"
+)
+
+// SetupAPIRoutes
+// @title						SMS gateway Service
+// @version         			1.0.0
+// @description     			This APIs return SMS-Gateway Methods
+// @Host 						localhost:8080
+// @BasePath  					/
+// @Schemes 					https
+func (s *Server) SetupAPIRoutes(
+	smsHandler *sms.SmsHandler,
+	priorityMiddleware *middleware.PriorityMiddleware,
+) {
+	r := s.engine
+
+	v1 := r.Group("v1")
+	v1.Use(middleware.HandleAuth(), priorityMiddleware.Handle)
+	{
+		v1.POST("/sms/send", smsHandler.Send)
+		v1.GET("/sms/log", smsHandler.GetAllSmsLog)
+		v1.GET("/sms/:id", smsHandler.ViewSmsTimeLine)
+	}
+}

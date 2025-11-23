@@ -1,0 +1,237 @@
+openapi: 3.0.1
+
+info:
+  title: SMS Gateway Service
+  description: API specification for SMS Gateway operations.
+  version: 1.0.0
+
+servers:
+  - url: https://localhost:8080/
+
+paths:
+
+  #######################################
+  #   GET /v1/sms/{id}
+  #######################################
+  /v1/sms/{id}:
+    get:
+      tags:
+        - SMS
+      summary: View SMS timeline
+      description: Retrieve the status history for a specific SMS message.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: SMS Message ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SMS timeline status list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsStatusLogListResponse'
+        "404":
+          description: SMS not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - ApiKeyAuth: []
+
+  #######################################
+  #   GET /v1/sms/log
+  #######################################
+  /v1/sms/log:
+    get:
+      tags:
+        - SMS
+      summary: Get all SMS logs
+      description: Retrieve all SMS logs with pagination.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of items per page
+      responses:
+        "200":
+          description: List of SMS logs with pagination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsStatusLogListResponse'
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - ApiKeyAuth: []
+
+  #######################################
+  #   POST /v1/sms/send
+  #######################################
+  /v1/sms/send:
+    post:
+      tags:
+        - SMS
+      summary: Send SMS
+      description: Send an SMS message to a phone number.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendSmsRequest'
+      responses:
+        "200":
+          description: SMS successfully queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/queued'
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "402":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - ApiKeyAuth: []
+      x-codegen-request-body-name: request
+
+components:
+
+  #######################################
+  #   AUTH
+  #######################################
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+
+  #######################################
+  #   SCHEMAS
+  #######################################
+  schemas:
+
+    # --- Individual log item ---
+    SmsStatusLogItem:
+      type: object
+      properties:
+        ID:
+          type: string
+          description: Unique log identifier (UUID)
+        CustomerID:
+          type: integer
+          description: Customer ID linked to the SMS
+        Phone:
+          type: string
+          description: Destination phone number
+        Message:
+          type: string
+          description: SMS message content
+        Priority:
+          type: integer
+          description: Priority of the message
+        status:
+          type: string
+          description: Processing status
+          enum:
+            - processing
+            - success
+            - failed
+            - queued
+        CreatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the log was created
+      required:
+        - ID
+        - CustomerID
+        - Phone
+        - Message
+        - Priority
+        - status
+        - CreatedAt
+
+    # --- Response: list of logs + message ---
+    SmsStatusLogListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SmsStatusLogItem'
+        message:
+          type: string
+          example: success
+      required:
+        - data
+        - message
+
+    # --- Request: send SMS ---
+    SendSmsRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        phone_number:
+          type: string
+      required:
+        - message
+        - phone_number
+
+    queued:
+      type: object
+      properties:
+        message:
+          type: string
+          example: 'queued'
+
+    # --- Error ---
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: error
+      required:
+        - message
