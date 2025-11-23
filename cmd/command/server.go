@@ -43,6 +43,12 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		return
 	}
 
+	clickhouse, err := infra.NewClickHouseClient(cfg.Database.ClickHouse)
+	if err != nil {
+		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to clickhouse"))
+		return
+	}
+
 	redisClient, err := infra.NewRedisClient(ctx, cfg.Database.Redis, cmd.Logger)
 	if err != nil {
 		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to connect to redis"))
@@ -58,14 +64,12 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	kafkaWriterSmsAccepted := infra.NewKafkaWriter(cfg.Kafka, constant.TopicAccepted)
 	kafkaSmsStatusWriter := infra.NewKafkaWriter(cfg.Kafka, constant.TopicStatus)
 
-	// create repositories
 	planRepository := repository.NewPlanRepository(psql.GetDb())
 	dlqRepository := repository.NewDlqRepository(psql.GetDb())
+	smsRepository := repository.NewSmsRepository(psql.GetDb(), clickhouse.GetDb())
 
-	// create services
 	planServiceInstance := plan.NewPlanService(planRepository, redisClient)
 
-	// Initialize balance service with Redis cache
 	balanceServiceInstance := balanceService.NewBalanceService(
 		redisClient,
 		psql.GetDb(),
@@ -81,13 +85,13 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	smsServiceInstance := smsService.NewSmsService(
 		balanceServiceInstance,
 		dlqRepository,
+		smsRepository,
 		redisClient,
 		cmd.Logger,
 		kafkaWriterSmsAccepted,
 		kafkaSmsStatusWriter,
 	)
 
-	// set plans in redis for get on demand
 	plans, err := planServiceInstance.GetAllPlansAndSetInRedis(ctx)
 	if err != nil {
 		cmd.Logger.WithContext(ctx).Fatal(errors.Wrap(err, "server : failed to get all plans and set in redis"))
@@ -104,10 +108,8 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 	h.Write(marshalled)
 	hash := h.Sum(nil)
 
-	// create handlers
 	smsHandler := sms.New(smsServiceInstance)
 
-	// create middlewares
 	priorityMiddleware := middleware.NewPriorityMiddleware(
 		redisClient,
 		planServiceInstance,
@@ -121,20 +123,17 @@ func (cmd Server) main(cfg *config.Config, ctx context.Context) {
 		priorityMiddleware,
 	)
 
-	// start background kafka workers (using worker pool pattern)
 	for i := 0; i < constant.KafkaWriteWorkerPool; i++ {
 		go smsServiceInstance.ProduceMessages(i)
 	}
 	cmd.Logger.WithContext(ctx).Infof("started %d kafka producer workers", constant.KafkaWriteWorkerPool)
 
-	// Graceful shutdown handler
 	defer func() {
 		cmd.Logger.Info("shutting down balance service...")
 		balanceServiceInstance.Stop()
 		cmd.Logger.Info("balance service stopped")
 	}()
 
-	// run the server
 	if err := server.Serve(ctx, fmt.Sprintf(":%d", cfg.HTTP.Port)); err != nil {
 		cmd.Logger.Fatal(err)
 	}
