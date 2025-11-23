@@ -4,6 +4,10 @@ import (
 	"arvan/message-gateway/internal/config"
 	"context"
 	"fmt"
+	gormLogger "gorm.io/gorm/logger"
+	"log"
+	"os"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -20,6 +24,17 @@ type PostgresClient struct {
 }
 
 func NewPostgresClient(ctx context.Context, cfg config.Postgres) (*PostgresClient, error) {
+
+	newLogger := gormLogger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		gormLogger.Config{
+			SlowThreshold:             2 * time.Second,
+			LogLevel:                  gormLogger.Info,
+			IgnoreRecordNotFoundError: true, // Ignore ErrRecordNotFound error for logger
+			Colorful:                  true,
+		},
+	)
+
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
 		cfg.Host,
@@ -28,7 +43,9 @@ func NewPostgresClient(ctx context.Context, cfg config.Postgres) (*PostgresClien
 		cfg.Database,
 		cfg.Port,
 	)
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: newLogger,
+	})
 	if err != nil {
 		return nil, err
 	}

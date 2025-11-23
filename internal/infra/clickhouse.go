@@ -6,6 +6,9 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migrateCk "github.com/golang-migrate/migrate/v4/database/clickhouse"
 	"github.com/pkg/errors"
+	gormLogger "gorm.io/gorm/logger"
+	"log"
+	"os"
 	"time"
 
 	stdCk "github.com/ClickHouse/clickhouse-go/v2"
@@ -18,6 +21,16 @@ type ClickHouseClient struct {
 }
 
 func NewClickHouseClient(cfg config.ClickHouse) (*ClickHouseClient, error) {
+	newLogger := gormLogger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		gormLogger.Config{
+			SlowThreshold:             2 * time.Second,
+			LogLevel:                  gormLogger.Info,
+			IgnoreRecordNotFoundError: true, // Ignore ErrRecordNotFound error for logger
+			Colorful:                  true,
+		},
+	)
+
 	db, err := gorm.Open(clickhouse.New(clickhouse.Config{
 		Conn: stdCk.OpenDB(&stdCk.Options{
 			Addr: []string{fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)},
@@ -35,7 +48,7 @@ func NewClickHouseClient(cfg config.ClickHouse) (*ClickHouseClient, error) {
 			ConnMaxLifetime:  time.Duration(10) * time.Minute,
 			ConnOpenStrategy: stdCk.ConnOpenInOrder,
 		}),
-	}))
+	}), &gorm.Config{Logger: newLogger})
 	if err != nil {
 		return nil, err
 	}
