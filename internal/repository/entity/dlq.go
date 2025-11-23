@@ -10,3 +10,7 @@ type KafkaDlq struct {
 	Priority      int
 	LastAttemptAt time.Time
 }
+
+func (KafkaDlq) TableName() string {
+	return "kafka_dlq"
+}

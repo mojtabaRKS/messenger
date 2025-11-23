@@ -16,6 +16,10 @@ type Plan struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+func (Plan) TableName() string {
+	return "plans"
+}
+
 func (p Plan) ToDomain() domain.Plan {
 	return domain.Plan{
 		ID:          p.ID,
