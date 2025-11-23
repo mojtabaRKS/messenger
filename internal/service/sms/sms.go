@@ -16,7 +16,6 @@ import (
 )
 
 func (ss *smsService) Send(ctx context.Context, priority, customerId int, req request.SendSmsRequest) error {
-	// Fast Redis-based balance deduction (no DB transaction on critical path)
 	msgId, err := ss.balanceService.DeductBalanceAndQueueSms(ctx, customerId, req.Message, req.PhoneNumber)
 	if err != nil {
 		return err
@@ -28,7 +27,7 @@ func (ss *smsService) Send(ctx context.Context, priority, customerId int, req re
 		To:         req.PhoneNumber,
 		Priority:   priority,
 		Message:    req.Message,
-		CreatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+		CreatedAt:  time.Now(),
 	}
 	b, err := json.Marshal(sms)
 	if err != nil {
@@ -56,24 +55,19 @@ func (ss *smsService) Send(ctx context.Context, priority, customerId int, req re
 	return nil
 }
 
-// ProduceMessages is a worker that processes messages from the channel synchronously.
-// Multiple workers run in parallel (configured by KafkaWriteWorkerPool constant).
 func (ss *smsService) ProduceMessages(workerID int) {
 	for km := range ss.kafkaWorkChan {
-		// Process synchronously in worker (no goroutine spawn)
 		success := false
 		for attempt := 0; attempt < constant.KafkaWriteRetries; attempt++ {
 			ctx, cancel := context.WithTimeout(context.Background(), constant.KafkaWriteTimeout)
 
 			// log error but move on
-			go func() {
-				err := ss.pushToStatusTopic(ctx, km)
-				if err != nil {
-					ss.logger.Warnf("kafka worker %d: write attempt %d failed: %v", workerID, attempt+1, err)
-				}
-			}()
+			err := ss.pushToStatusTopic(ctx, km)
+			if err != nil {
+				ss.logger.Warnf("kafka worker %d: write attempt %d failed: %v", workerID, attempt+1, err)
+			}
 
-			err := ss.kafkaWriterSmsAccepted.WriteMessages(ctx, kafka.Message{
+			err = ss.kafkaWriterSmsAccepted.WriteMessages(ctx, kafka.Message{
 				Key:   []byte(km.Key),
 				Value: km.Payload,
 				Time:  time.Now(),
@@ -136,4 +130,11 @@ func (ss *smsService) pushToStatusTopic(ctx context.Context, kmsg domain.KafkaMe
 	}
 
 	return nil
+}
+
+func (ss *smsService) GetAllSmsLog(ctx context.Context, customerId, limit, offset int) ([]domain.SMSStatus, int64, error) {
+	return ss.smsRepository.GetAllSmsLog(ctx, customerId, limit, offset)
+}
+func (ss *smsService) ViewSmsTimeLine(ctx context.Context, messageId string) ([]domain.SMSStatus, error) {
+	return ss.smsRepository.ViewSmsTimeLine(ctx, messageId)
 }

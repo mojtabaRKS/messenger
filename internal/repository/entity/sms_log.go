@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"arvan/message-gateway/internal/domain"
 	"fmt"
 	"github.com/google/uuid"
 	"time"
@@ -19,16 +20,28 @@ func (SmsLog) TableName() string {
 }
 
 type SMSStatusLog struct {
-	JobID      string    `gorm:"job_id"`
-	CustomerID string    `gorm:"customer_id"`
+	Id         string    `gorm:"id"`
+	CustomerID int       `gorm:"customer_id"`
 	Phone      string    `gorm:"phone"`
 	Message    string    `gorm:"message"`
 	Status     string    `gorm:"status"`
-	Priority   int32     `gorm:"priority"`
+	Priority   int       `gorm:"priority"`
 	CreatedAt  time.Time `gorm:"created_at"`
 	Timestamp  time.Time `gorm:"timestamp"`
 }
 
 func (SMSStatusLog) TableName() string {
 	return "sms_status_log"
+}
+
+func (s SMSStatusLog) ToDomain() domain.SMSStatus {
+	return domain.SMSStatus{
+		ID:         s.Id,
+		CustomerID: s.CustomerID,
+		Priority:   s.Priority,
+		Phone:      s.Phone,
+		Message:    s.Message,
+		Status:     s.Status,
+		CreatedAt:  s.CreatedAt,
+	}
 }

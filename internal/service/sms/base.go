@@ -14,6 +14,7 @@ import (
 type smsService struct {
 	balanceService         balanceService
 	dlqRepository          dlqRepository
+	smsRepository          smsRepository
 	redisClient            *redis.Client
 	logger                 *logrus.Logger
 	kafkaWriterSmsAccepted *kafka.Writer
@@ -29,9 +30,15 @@ type dlqRepository interface {
 	InsertDLQ(ctx context.Context, km domain.KafkaMessage) error
 }
 
+type smsRepository interface {
+	GetAllSmsLog(ctx context.Context, customerId, limit, offset int) ([]domain.SMSStatus, int64, error)
+	ViewSmsTimeLine(ctx context.Context, messageId string) ([]domain.SMSStatus, error)
+}
+
 func NewSmsService(
 	balanceService balanceService,
 	dlqRepo dlqRepository,
+	smsRepository smsRepository,
 	redisClient *redis.Client,
 	logger *logrus.Logger,
 	kafkaWriterSmsAccepted *kafka.Writer,
@@ -40,6 +47,7 @@ func NewSmsService(
 	return &smsService{
 		balanceService:         balanceService,
 		dlqRepository:          dlqRepo,
+		smsRepository:          smsRepository,
 		redisClient:            redisClient,
 		logger:                 logger,
 		kafkaWriterSmsAccepted: kafkaWriterSmsAccepted,

@@ -22,5 +22,7 @@ func (s *Server) SetupAPIRoutes(
 	v1.Use(middleware.HandleAuth(), priorityMiddleware.Handle)
 	{
 		v1.POST("/sms/send", smsHandler.Send)
+		v1.GET("/sms/log", smsHandler.GetAllSmsLog)
+		v1.GET("/sms/:id", smsHandler.ViewSmsTimeLine)
 	}
 }

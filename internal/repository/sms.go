@@ -2,6 +2,7 @@ package repository
 
 import (
 	"arvan/message-gateway/internal/constant"
+	"arvan/message-gateway/internal/domain"
 	"arvan/message-gateway/internal/repository/entity"
 	"context"
 	"github.com/google/uuid"
@@ -29,7 +30,6 @@ func NewSmsRepository(
 func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId int, message, receiver string) (uuid.UUID, error) {
 	msgId := uuid.New()
 
-	// very short-lived transaction
 	ctx, cancel := context.WithTimeout(ctx, constant.DBTxTimeout)
 	defer cancel()
 
@@ -46,7 +46,6 @@ func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId
 			return errors.Wrap(err, "failed to deduct balance")
 		}
 
-		// append only sms log table if cost is affected
 		err = gorm.G[entity.SmsLog](tx).
 			Create(ctx, &entity.SmsLog{
 				MessageId:  msgId,
@@ -73,14 +72,14 @@ func (sr *smsRepository) DeductBalanceAndSaveSms(ctx context.Context, customerId
 	return msgId, nil
 }
 
-func (sr *smsRepository) InsertSMSStatus(ctx context.Context, jobID, customerID string, phone, message, status string, priority int, createdAt time.Time, timestamp time.Time) error {
+func (sr *smsRepository) InsertSMSStatus(ctx context.Context, jobID string, customerID int, phone, message, status string, priority int, createdAt time.Time, timestamp time.Time) error {
 	err := gorm.G[entity.SMSStatusLog](sr.clickhouse).Create(ctx, &entity.SMSStatusLog{
-		JobID:      jobID,
 		CustomerID: customerID,
+		Id:         jobID,
 		Phone:      phone,
 		Message:    message,
 		Status:     status,
-		Priority:   int32(priority),
+		Priority:   priority,
 		CreatedAt:  createdAt,
 		Timestamp:  timestamp,
 	})
@@ -90,4 +89,47 @@ func (sr *smsRepository) InsertSMSStatus(ctx context.Context, jobID, customerID 
 	}
 
 	return nil
+}
+
+func (sr *smsRepository) GetAllSmsLog(ctx context.Context, customerId, limit, offset int) ([]domain.SMSStatus, int64, error) {
+	total, err := gorm.G[entity.SMSStatusLog](sr.clickhouse).
+		Where("customer_id = ?", customerId).
+		Count(ctx, "id")
+
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "failed to get all sms logs")
+	}
+
+	logs, err := gorm.G[entity.SMSStatusLog](sr.clickhouse).
+		Where("customer_id = ?", customerId).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(ctx)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "failed to get all sms logs")
+	}
+
+	var smsList []domain.SMSStatus
+	for _, log := range logs {
+		smsList = append(smsList, log.ToDomain())
+	}
+
+	return smsList, total, nil
+}
+func (sr *smsRepository) ViewSmsTimeLine(ctx context.Context, messageId string) ([]domain.SMSStatus, error) {
+	logs, err := gorm.G[entity.SMSStatusLog](sr.clickhouse).
+		Where("id = ?", messageId).
+		Order("created_at DESC").
+		Find(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get all sms logs")
+	}
+
+	var smsList []domain.SMSStatus
+	for _, log := range logs {
+		smsList = append(smsList, log.ToDomain())
+	}
+
+	return smsList, nil
 }
